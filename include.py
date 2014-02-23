@@ -1,4 +1,4 @@
-
+from copy import copy, deepcopy
 
 class Bot:
 
@@ -8,6 +8,7 @@ class Bot:
         self.deposit = deposit
         self.spread = spread
         self.orders = []
+        self.deposit_array = []
 
     def start(self, params, full_output = False):
         self.deposit = self.init_deposit
@@ -142,6 +143,8 @@ class Bot:
             # volume = deposit*0.9/len_orders
             #len_orders = deposit*0.9/volume
 
+            self.deposit_array.append(deposit_by_orders)
+
         orders_sum = 0
         for order in self.orders:
             row = quotes[-1]
@@ -157,6 +160,61 @@ class Bot:
         # max_profit
 
         if full_output:
-            return((deposit_by_orders, max_profit))
+            return((deposit_by_orders, max_profit, len(self.quotes), self.deposit_array))
         else:
             return(deposit_by_orders)
+
+    def optimize(self, params):
+        optimized = False
+        value = self.start(params)
+        print(value)
+        final_params = []
+
+        bounds = [
+            (1, 1000, 1),
+            (2, 240, 1),
+            (1, 200, 1),
+            (10, 1000, 1),
+            (0.0009, 0.1, 0.0001),
+            (0.1, 10.0, 0.1),
+            (0.001, 0.1, 0.001)
+        ]
+
+        step = 0
+        while not optimized:
+            changed = False
+            for i in range(len(params)):
+                var = params[i]
+                new_params = deepcopy(params)
+                new_params[i] = var + bounds[i][2]
+                in_bounds = True
+                if var + bounds[i][2] > bounds[i][1] or new_params[0]*new_params[2] > self.init_deposit*0.9:
+                    in_bounds = False
+                if in_bounds:
+                    new_value = self.start(new_params)
+                if in_bounds and new_value > value:
+                    value = new_value
+                    params = new_params
+                    final_params = new_params
+                    changed = True
+                    print(step, params, value)
+                    step += 1
+                else:
+                    new_value = params
+                    new_params[i] = var - bounds[i][2]
+                    in_bounds = True
+                    if var - bounds[i][2] < bounds[i][0] or new_params[0]*new_params[2] > self.init_deposit*0.9:
+                        in_bounds = False
+                    if in_bounds:
+                        new_value = self.start(new_params)
+                    if in_bounds and new_value > value:
+                        value = new_value
+                        params = new_params
+                        changed = True
+                        print(step, params, value)
+                        step += 1
+            if not changed:
+                print("optimized", in_bounds)
+                break
+
+        return(final_params)
